@@ -692,11 +692,6 @@ Shovelcat Theory Research
 
 ---
 
-## 🙏 Acknowledgments
-
-- Dr. Samira Ebrahimi Kahou (Mila) for research guidance
-- Claude (Anthropic) for collaborative development
-- The mathematical foundations: Euler, Fibonacci, and the cryptographic community
 
 ---
 
