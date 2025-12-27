@@ -63,6 +63,7 @@ class VerificationEvent:
     verifier_id: str
     details: Dict[str, Any] = field(default_factory=dict)
     nonce: str = field(default_factory=lambda: secrets.token_hex(16))
+    prev_hash: Optional[str] = None  # Hash of all prior events (hex)
     
     def to_bytes(self) -> bytes:
         """Serialize for hashing."""
@@ -71,7 +72,8 @@ class VerificationEvent:
             'time': self.timestamp.isoformat(),
             'verifier': self.verifier_id,
             'details': self.details,
-            'nonce': self.nonce
+            'nonce': self.nonce,
+            'prev_hash': self.prev_hash,
         }
         return json.dumps(data, sort_keys=True).encode('utf-8')
 
@@ -88,6 +90,11 @@ class VerificationChain:
     
     def add_event(self, event: VerificationEvent) -> str:
         """Add event and return running hash."""
+        # Each event must include the cumulative hash of everything before it.
+        # This prevents reordering or tampering because the expected hash will
+        # no longer match.
+        prior_hash = self.get_chain_hash().hex()
+        event.prev_hash = prior_hash
         self.events.append(event)
         return self.get_chain_hash().hex()
     
@@ -137,12 +144,28 @@ class VerificationChain:
         """Verify the chain hasn't been tampered with."""
         if not self.events:
             return True, "Empty chain"
-        
+
         # Check timestamps are sequential
         for i in range(1, len(self.events)):
             if self.events[i].timestamp < self.events[i-1].timestamp:
                 return False, f"Timestamp order violation at event {i}"
-        
+
+        # Check hash links (each event must include the hash of everything
+        # before it).
+        hasher = hashlib.sha256()
+        hasher.update(self.user_id.encode('utf-8'))
+
+        for i, event in enumerate(self.events):
+            expected_prev = hasher.digest().hex()
+            if event.prev_hash != expected_prev:
+                return False, (
+                    f"Hash chain mismatch at event {i}: "
+                    f"expected {expected_prev}, found {event.prev_hash}"
+                )
+
+            # Extend hash with current event for next iteration
+            hasher.update(event.to_bytes())
+
         return True, "Chain integrity verified"
 
 
